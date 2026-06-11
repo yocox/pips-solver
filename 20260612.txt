@@ -1,0 +1,24 @@
+# 盤面
+aaaaa
+bcdde
+ccdee
+f   g
+ff hg
+ii gg
+iijjk
+
+# 限制
+a =
+b >4
+c 0
+d 15
+e 15
+f 11
+g =
+h <4
+i 4
+j 4
+k >4
+
+# 骨牌
+40 21 03 11 54 66 55 63 14 22 50 23 44 33 46
