@@ -39,6 +39,13 @@ from collections import Counter
 
 
 def parse_input(text):
+    """
+    將原始題目文字解析成三個區段的字串清單。
+
+    回傳 dict，鍵為 '盤面'、'限制'、'骨牌'，
+    值為該區段每一行（不含標題行與空白行）的原始字串清單。
+    若找不到必要區段則拋出 ValueError。
+    """
     lines = text.split("\n")
 
     sections = {"盤面": [], "限制": [], "骨牌": []}
@@ -66,7 +73,25 @@ def parse_input(text):
 
 
 def build_board(board_lines):
-    """回傳 (cells 清單[(r,c)], region_of{(r,c):code}, R, C)。"""
+    """
+    將盤面字串清單轉換成格子座標與區域對照表。
+
+    參數
+    ----
+    board_lines : list[str]
+        '# 盤面' 區段的每一行原始字串。
+
+    回傳
+    ----
+    cells : list[tuple[int,int]]
+        所有需要放骨牌的格子座標 (row, col)，依 row-major 順序排列。
+    region_of : dict[tuple[int,int], str]
+        格子座標 → 區域代碼（'*' 表示無限制格）。
+    R : int
+        盤面列數。
+    C : int
+        盤面欄數（以最長行為準）。
+    """
     R = len(board_lines)
     C = max((len(l) for l in board_lines), default=0)
     cells = []
@@ -83,7 +108,17 @@ def build_board(board_lines):
 
 
 def parse_constraints(con_lines):
-    """code -> (kind, value)。kind ∈ {'eq','gt','lt','sum'}"""
+    """
+    解析 '# 限制' 區段，回傳區域代碼到限制規格的對照表。
+
+    回傳 dict：code -> (kind, value)
+      - kind='eq'  : 區內所有格點數須相等，value=None
+      - kind='gt'  : 區內點數總和 > value
+      - kind='lt'  : 區內點數總和 < value
+      - kind='sum' : 區內點數總和 == value
+
+    若某行缺少限制形式則拋出 ValueError。
+    """
     cons = {}
     for line in con_lines:
         parts = line.split()
@@ -105,6 +140,13 @@ def parse_constraints(con_lines):
 
 
 def parse_dominoes(dom_lines):
+    """
+    解析 '# 骨牌' 區段，回傳骨牌清單。
+
+    每個 2 字元 token（如 '23'）代表一張骨牌，兩個字元分別為兩面點數（0-6）。
+    回傳 list[tuple[int,int]]，例如 [(2,3), (0,0), ...]。
+    token 格式不符時拋出 ValueError。
+    """
     toks = " ".join(dom_lines).split()
     dominoes = []
     for t in toks:
@@ -144,6 +186,7 @@ class PipsSolver:
         self.capped = False
 
     def _neighbors(self, cell):
+        """回傳與 cell 上下左右相鄰、且在盤面內的格子清單。"""
         r, c = cell
         out = []
         for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
@@ -152,8 +195,15 @@ class PipsSolver:
                 out.append(n)
         return out
 
-    # 驗證合理性（盤面格數 vs 骨牌格數、區域是否都有定義）
     def validate(self):
+        """
+        對題目進行基本合理性檢查，回傳警告訊息清單（無問題則為空列表）。
+
+        檢查項目：
+        - 盤面格數是否等於骨牌張數 × 2。
+        - 盤面格數是否為偶數（奇數格無法完全鋪滿）。
+        - 盤面出現的區域代碼是否都在 '# 限制' 中有定義。
+        """
         msgs = []
         ncells = len(self.cells)
         ndom = sum(self.dom_count.values())
@@ -173,6 +223,17 @@ class PipsSolver:
         return msgs
 
     def _region_ok(self, code):
+        """
+        檢查指定區域的限制在目前已填入點數下是否仍可能成立。
+
+        採用提前剪枝策略：
+        - 'sum'：已填總和超過目標 → False；全填完且不等於目標 → False。
+        - 'gt' ：全填完時才判斷總和是否 > 目標，否則保守回傳 True。
+        - 'lt' ：已填總和 >= 目標則必定違反（後續只增不減）→ False。
+        - 'eq' ：已出現兩種以上不同點數 → False。
+
+        回傳 True 表示目前狀態仍合法（不代表最終一定可行）。
+        """
         kind, v = self.cons[code]
         cl = self.region_cells[code]
         filled = [self.val[c] for c in cl if self.val[c] is not None]
@@ -197,12 +258,25 @@ class PipsSolver:
         return True
 
     def _first_uncovered(self):
+        """
+        依 row-major 順序找出第一個尚未填入點數的格子。
+
+        回傳該格座標 (r, c)；若所有格子都已填滿則回傳 None（即找到一組完整解）。
+        """
         for cell in self.order:
             if self.val[cell] is None:
                 return cell
         return None
 
     def _check_touch(self, *cells):
+        """
+        在剛放下骨牌後，對骨牌所涉及的區域逐一執行限制檢查。
+
+        參數 cells 為剛填入點數的格子（通常為骨牌的兩個格子）。
+        對每個格子所屬的有限制區域呼叫 _region_ok()，
+        同一區域只檢查一次（避免重複）。
+        任一區域不合法即回傳 False，全部通過則回傳 True。
+        """
         seen = set()
         for cell in cells:
             code = self.region_of[cell]
@@ -213,10 +287,27 @@ class PipsSolver:
         return True
 
     def solve(self):
+        """
+        啟動回溯搜尋，回傳所有找到的解。
+
+        回傳 list[list[tuple]]，每個解為一組骨牌放置記錄：
+            [(cell, nb, domino_type, (va, vb)), ...]
+        其中 cell、nb 為骨牌佔據的兩個格子座標，
+        domino_type 為該骨牌的正規形式（較小面在前），
+        (va, vb) 為實際填入 cell 與 nb 的點數（考慮翻轉方向）。
+        """
         self._backtrack()
         return self.solutions
 
     def _backtrack(self):
+        """
+        遞迴回溯核心。
+
+        每次取出第一個未填格子，枚舉其所有相鄰空格作為骨牌搭檔，
+        再枚舉可用骨牌類型與翻轉方向，放入點數後立即進行限制剪枝。
+        合法則繼續遞迴，否則撤銷（backtrack）。
+        找到完整解時記錄至 self.solutions；達到 max_solutions 上限後設旗停止搜尋。
+        """
         if self.capped:
             return
         cell = self._first_uncovered()
@@ -253,6 +344,13 @@ class PipsSolver:
 
 
 def render_solution(placements, R, C, region_of):
+    """
+    將一組解轉換成純文字盤面字串，方便在終端機中顯示。
+
+    每個格子以兩個字元寬度呈現點數；空缺格子顯示為空白，
+    已分配但尚未填入的格子（理論上不應發生）顯示為 ' .'。
+    回傳以換行符連接的多行字串。
+    """
     grid = [["  " for _ in range(C)] for _ in range(R)]
     for r in range(R):
         for c in range(C):
@@ -270,6 +368,14 @@ def render_solution(placements, R, C, region_of):
 
 
 def _region_palette(region_of):
+    """
+    為每個限制區域代碼產生一個 pastel 色（RGB tuple）。
+
+    顏色依 HSL 色相環平均分佈（偏移 0.13 避開純紅），
+    亮度高（0.82）、飽和度低（0.45），視覺上柔和易區分。
+    '*'（無限制格）固定給中性淺灰 (228, 228, 230)。
+    回傳 dict：code -> (R, G, B)。
+    """
     """為每個區域代碼配一個淡色（pastel）。'*' 與空缺給中性灰。"""
     import colorsys
 
@@ -285,7 +391,31 @@ def _region_palette(region_of):
 
 
 def render_image(placements, R, C, region_of, path, tint=False, cell=92):
-    """把一組解畫成 PNG。骨牌畫成圓角磚塊＋骰子點數。tint=True 時各區上淡色底。"""
+    """
+    將一組解繪製成 PNG 圖片並存檔。
+
+    繪製流程分三層：
+      1. （可選，tint=True）各格子依所屬區域塗 pastel 色底。
+      2. 骨牌磚塊：以圓角矩形框出每張骨牌的兩格，並畫中線分隔兩面。
+      3. 骰子點數：依點數值在格子中心繪製對應排列的實心圓點。
+
+    參數
+    ----
+    placements : list[tuple]
+        solve() 回傳的骨牌放置記錄。
+    R, C : int
+        盤面列數與欄數。
+    region_of : dict
+        格子座標 → 區域代碼（用於 tint 配色）。
+    path : str
+        輸出 PNG 檔案路徑。
+    tint : bool
+        是否為各限制區上淡色底（預設 False）。
+    cell : int
+        每個格子的像素大小（預設 92）。
+
+    回傳 True 表示成功；若 Pillow 未安裝則印出提示並回傳 False。
+    """
     try:
         from PIL import Image, ImageDraw
     except ImportError:
@@ -299,9 +429,11 @@ def render_image(placements, R, C, region_of, path, tint=False, cell=92):
     d = ImageDraw.Draw(img)
 
     def topleft(r, c):
+        """回傳格子 (r, c) 左上角的像素座標 (x, y)。"""
         return PAD + c * (cell + GAP), PAD + r * (cell + GAP)
 
     def rrect(xy, rad, **kw):
+        """在指定矩形範圍繪製圓角矩形，其餘參數傳遞給 ImageDraw.rounded_rectangle。"""
         d.rounded_rectangle(xy, radius=rad, **kw)
 
     # 1) （可選）區域淡色底
@@ -338,6 +470,12 @@ def render_image(placements, R, C, region_of, path, tint=False, cell=92):
 
     # 3) 骰子點數
     def pips(cx, cy, n, rad=8, col=(38, 40, 48)):
+        """
+        在格子中心 (cx, cy) 依照骰子慣例繪製 n 個點（0-6）。
+
+        點的排列位置參考標準骰子佈局，以 cell//4 為偏移量決定間距。
+        每個點以半徑 rad 的實心圓表示，顏色由 col 指定。
+        """
         o = cell // 4
         P = {
             0: [],
@@ -369,6 +507,12 @@ def render_image(placements, R, C, region_of, path, tint=False, cell=92):
 
 
 def main():
+    """
+    命令列進入點。
+
+    解析引數後依序執行：讀取題目 → 建立盤面 → 解析限制與骨牌 →
+    驗證輸入 → 求解 → 印出結果 → （可選）輸出 PNG 圖片。
+    """
     import argparse
 
     ap = argparse.ArgumentParser(description="泛化 Pips 骨牌謎題 solver")
