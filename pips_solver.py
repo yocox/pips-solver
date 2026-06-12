@@ -450,7 +450,7 @@ def render_image(placements, R, C, region_of, path, tint=False, cell=92):
     # 2) 骨牌磚塊
     DOM_FILL = (237, 239, 244) if not tint else None  # tint 時讓底色透出，只描邊
     DOM_EDGE = (96, 101, 118)
-    DIV = (176, 180, 192)
+    DIV = (202, 212, 222)
     for cellp, nb, dt, (va, vb) in placements:
         (ar, ac), (br, bc) = cellp, nb
         ax, ay = topleft(ar, ac)
@@ -463,10 +463,10 @@ def render_image(placements, R, C, region_of, path, tint=False, cell=92):
             rrect([x0, y0, x1, y1], 20, fill=DOM_FILL, outline=DOM_EDGE, width=5)
         if ac == bc:  # 直放
             my = (min(ay, by) + max(ay, by) + cell) // 2
-            d.line([x0 + 14, my, x1 - 14, my], fill=DIV, width=3)
+            d.line([x0 + 14, my, x1 - 14, my], fill=DIV, width=2)
         else:  # 橫放
             mx = (min(ax, bx) + max(ax, bx) + cell) // 2
-            d.line([mx, y0 + 14, mx, y1 - 14], fill=DIV, width=3)
+            d.line([mx, y0 + 14, mx, y1 - 14], fill=DIV, width=2)
 
     # 3) 骰子點數
     def pips(cx, cy, n, rad=8, col=(38, 40, 48)):
