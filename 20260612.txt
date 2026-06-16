@@ -1,24 +1,32 @@
 # 盤面
-aaaaa
-bcdde
-ccdee
-f   g
-ff hg
-ii gg
-iijjk
+aaa
+b
+cc
+d
+d   efffg
+      h
+ i  j h
+ k  l m
+ k  l m
+ nnnn o
 
 # 限制
-a =
-b >4
-c 0
-d 15
-e 15
-f 11
-g =
-h <4
-i 4
-j 4
-k >4
+a 2
+b 5
+c 8
+d >9
+e >2
+f 2
+g 2
+h 10
+i >4
+j >4
+k 2
+l =
+m =
+n =
+o 2
 
 # 骨牌
-40 21 03 11 54 66 55 63 14 22 50 23 44 33 46
+62 00 25 30 12 65 02 55 42 53 44 36 50 61
+
